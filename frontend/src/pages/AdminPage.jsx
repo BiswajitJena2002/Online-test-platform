@@ -8,26 +8,12 @@ const AdminPage = () => {
     const [correctMark, setCorrectMark] = useState(1);
     const [wrongMark, setWrongMark] = useState(-0.25);
     const [generatedTestLink, setGeneratedTestLink] = useState('');
-    const [serverIP, setServerIP] = useState('');
 
     // Production API Base URL
     const API_BASE = 'https://online-test-backend-m2sw.onrender.com';
 
-    React.useEffect(() => {
-        // Fetch server IP
-        const fetchIP = async () => {
-            try {
-                const res = await fetch(`${API_BASE}/api/ip`);
-                const data = await res.json();
-                if (data.ip) {
-                    setServerIP(data.ip);
-                }
-            } catch (e) {
-                console.error("Failed to fetch IP", e);
-            }
-        };
-        fetchIP();
-    }, [API_BASE]);
+    // Production Frontend URL - UPDATE THIS with your actual Render frontend URL
+    const FRONTEND_URL = window.location.origin; // This will use the current domain
 
     const handleCreateTest = async () => {
         if (!testName.trim()) {
@@ -58,7 +44,7 @@ const AdminPage = () => {
 
             const data = await res.json();
             if (res.ok) {
-                const testLink = `http://${serverIP}:${window.location.port}/test/${data.testId}`;
+                const testLink = `${FRONTEND_URL}/test/${data.testId}`;
                 setGeneratedTestLink(testLink);
                 setMessage(`✅ Success: Test "${data.testName}" created with ${data.questionCount} questions!`);
                 // Clear form
