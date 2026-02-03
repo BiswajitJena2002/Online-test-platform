@@ -7,7 +7,7 @@ const ResultPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const API_BASE = `http://${window.location.hostname}:5000`;
+    const API_BASE = 'https://online-test-backend-m2sw.onrender.com';
 
     useEffect(() => {
         const fetchResult = async () => {

@@ -10,8 +10,8 @@ const AdminPage = () => {
     const [generatedTestLink, setGeneratedTestLink] = useState('');
     const [serverIP, setServerIP] = useState('');
 
-    // Dynamic API Base URL
-    const API_BASE = `http://${window.location.hostname}:5000`;
+    // Production API Base URL
+    const API_BASE = 'https://online-test-backend-m2sw.onrender.com';
 
     React.useEffect(() => {
         // Fetch server IP

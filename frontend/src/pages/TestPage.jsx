@@ -16,7 +16,7 @@ const TestPage = () => {
     const [isPaused, setIsPaused] = useState(false);
     const [testName, setTestName] = useState('');
     const navigate = useNavigate();
-    const API_BASE = `http://${window.location.hostname}:5000`;
+    const API_BASE = 'https://online-test-backend-m2sw.onrender.com';
 
     // Start test session when component mounts
     useEffect(() => {
