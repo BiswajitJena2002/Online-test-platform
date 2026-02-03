@@ -1,0 +1,55 @@
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const testController = require('./controllers/testController');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(bodyParser.json());
+
+app.get('/', (req, res) => {
+    res.send('Online Test API is running');
+});
+
+// API Routes
+// New test-based routes
+app.post('/api/test/create', testController.createTest);
+app.get('/api/test/:testId/info', testController.getTestInfo);
+app.post('/api/test/:testId/start', testController.startTestSession);
+
+// Legacy routes (backward compatibility)
+app.post('/api/questions', testController.uploadQuestions);
+app.post('/api/config', testController.setConfig);
+app.post('/api/start', testController.startTest);
+app.post('/api/submit-answer', testController.submitAnswer);
+app.post('/api/end', testController.endTest);
+app.get('/api/result/:sessionId', testController.getResult);
+app.get('/api/info', testController.getInfo);
+app.get('/api/ip', (req, res) => {
+    const os = require('os');
+    const interfaces = os.networkInterfaces();
+    let ipAddress = 'localhost';
+
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // Skip internal (i.e. 127.0.0.1) and non-ipv4 addresses
+            if ('IPv4' !== iface.family || iface.internal) {
+                continue;
+            }
+            // Prefer 192.x or 10.x or 172.x addresses (common local networks)
+            // But usually the first external IPv4 is good enough
+            ipAddress = iface.address;
+            break;
+        }
+        if (ipAddress !== 'localhost') break;
+    }
+
+    res.json({ ip: ipAddress });
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
+
