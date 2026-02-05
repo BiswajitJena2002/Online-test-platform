@@ -361,7 +361,7 @@ const TestPage = () => {
                         </button>
 
                         {/* Image */}
-                        <div style={{ overflow: 'auto', maxWidth: '100%', maxHeight: '80vh' }}>
+                        <div style={{ overflow: 'auto', maxWidth: '80vw', maxHeight: '75vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                             <img
                                 src={imageModal.url}
                                 alt="Zoomed Question"
@@ -370,8 +370,9 @@ const TestPage = () => {
                                     transformOrigin: 'center center',
                                     transition: 'transform 0.3s ease',
                                     display: 'block',
-                                    maxWidth: 'none',
-                                    height: 'auto'
+                                    width: '80vw',
+                                    height: 'auto',
+                                    objectFit: 'contain'
                                 }}
                             />
                         </div>
