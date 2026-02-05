@@ -17,6 +17,7 @@ const TestPage = () => {
     const [timerMinutes, setTimerMinutes] = useState(30);
     const [isPaused, setIsPaused] = useState(false);
     const [testName, setTestName] = useState('');
+    const [imageModal, setImageModal] = useState({ show: false, url: '', zoom: 1 });
     const navigate = useNavigate();
     const API_BASE = import.meta.env.MODE === 'development'
         ? 'http://localhost:5000'
@@ -243,7 +244,22 @@ const TestPage = () => {
                                         ? currentQuestionEnglish.image
                                         : `${API_BASE}${currentQuestionEnglish.image}`}
                                     alt="Question Attachment"
-                                    style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                                    onClick={() => setImageModal({
+                                        show: true,
+                                        url: currentQuestionEnglish.image.startsWith('http')
+                                            ? currentQuestionEnglish.image
+                                            : `${API_BASE}${currentQuestionEnglish.image}`,
+                                        zoom: 1
+                                    })}
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '300px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #e5e7eb',
+                                        cursor: 'zoom-in',
+                                        transition: 'transform 0.2s',
+                                        ':hover': { transform: 'scale(1.02)' }
+                                    }}
                                 />
                             </div>
                         )}
@@ -288,6 +304,142 @@ const TestPage = () => {
                     />
                 </div>
             </div>
+
+            {/* Image Zoom Modal */}
+            {imageModal.show && (
+                <div
+                    onClick={() => setImageModal({ show: false, url: '', zoom: 1 })}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        padding: '2rem'
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            position: 'relative',
+                            maxWidth: '90vw',
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '1rem'
+                        }}
+                    >
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setImageModal({ show: false, url: '', zoom: 1 })}
+                            style={{
+                                position: 'absolute',
+                                top: '-3rem',
+                                right: 0,
+                                background: 'white',
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: '40px',
+                                height: '40px',
+                                fontSize: '24px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 'bold',
+                                color: '#374151',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                            }}
+                        >
+                            ×
+                        </button>
+
+                        {/* Image */}
+                        <div style={{ overflow: 'auto', maxWidth: '100%', maxHeight: '80vh' }}>
+                            <img
+                                src={imageModal.url}
+                                alt="Zoomed Question"
+                                style={{
+                                    transform: `scale(${imageModal.zoom})`,
+                                    transformOrigin: 'center center',
+                                    transition: 'transform 0.3s ease',
+                                    display: 'block',
+                                    maxWidth: 'none',
+                                    height: 'auto'
+                                }}
+                            />
+                        </div>
+
+                        {/* Zoom Controls */}
+                        <div style={{
+                            background: 'white',
+                            borderRadius: '24px',
+                            padding: '0.5rem 1rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                        }}>
+                            <button
+                                onClick={() => setImageModal(prev => ({
+                                    ...prev,
+                                    zoom: Math.max(0.5, prev.zoom - 0.25)
+                                }))}
+                                disabled={imageModal.zoom <= 0.5}
+                                style={{
+                                    background: '#2563eb',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: '36px',
+                                    height: '36px',
+                                    fontSize: '20px',
+                                    cursor: imageModal.zoom <= 0.5 ? 'not-allowed' : 'pointer',
+                                    opacity: imageModal.zoom <= 0.5 ? 0.5 : 1,
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                −
+                            </button>
+                            <span style={{
+                                fontWeight: '600',
+                                minWidth: '60px',
+                                textAlign: 'center',
+                                color: '#374151'
+                            }}>
+                                {Math.round(imageModal.zoom * 100)}%
+                            </span>
+                            <button
+                                onClick={() => setImageModal(prev => ({
+                                    ...prev,
+                                    zoom: Math.min(3, prev.zoom + 0.25)
+                                }))}
+                                disabled={imageModal.zoom >= 3}
+                                style={{
+                                    background: '#2563eb',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: '36px',
+                                    height: '36px',
+                                    fontSize: '20px',
+                                    cursor: imageModal.zoom >= 3 ? 'not-allowed' : 'pointer',
+                                    opacity: imageModal.zoom >= 3 ? 0.5 : 1,
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                +
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

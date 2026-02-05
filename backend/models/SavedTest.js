@@ -18,26 +18,23 @@ const SavedTestSchema = new mongoose.Schema({
         correctMark: Number,
         wrongMark: Number
     },
-    questions: [{
-        question_id: String,
-        question: String,
-        options: [String],
-        correct_answer: String
-    }],
+    questions: {
+        type: mongoose.Schema.Types.Mixed,
+        required: true
+    },
     images: {
-        type: Map,
-        of: String
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     },
     isDualLanguage: {
         type: Boolean,
         default: false
     },
-    questionsOdia: [{
-        question_id: String,
-        question: String,
-        options: [String],
-        correct_answer: String
-    }]
+    questionsOdia: {
+        type: mongoose.Schema.Types.Mixed,
+        default: []
+    }
 });
 
 module.exports = mongoose.model('SavedTest', SavedTestSchema);
+
