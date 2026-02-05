@@ -1,9 +1,9 @@
 const { v4: uuidv4 } = require('uuid');
+const SavedTest = require('../models/SavedTest');
 
 // Store tests by unique ID
 let tests = {}; // { testId: { testName, timerMinutes, correctMark, wrongMark, questions, createdAt } }
 let sessions = {};
-let savedTests = []; // Store saved test templates
 
 // Default config (used when no test specified - backward compatibility)
 let defaultConfig = {
@@ -277,71 +277,99 @@ exports.getInfo = (req, res) => {
 // ========== SAVED TESTS FEATURE ==========
 
 // SAVE TEST TEMPLATE (with private code)
-exports.saveTest = (req, res) => {
-    const { testId, privateCode } = req.body;
+exports.saveTest = async (req, res) => {
+    try {
+        const { testId, privateCode } = req.body;
 
-    // Validate private code
-    const PRIVATE_CODE = process.env.SAVE_TEST_CODE || 'Jitu@2002';
-    if (privateCode !== PRIVATE_CODE) {
-        return res.status(403).json({ error: 'Invalid private code' });
-    }
-
-    // Find the test
-    const test = tests[testId];
-    if (!test) {
-        return res.status(404).json({ error: 'Test not found' });
-    }
-
-    // Create saved test object
-    const savedTestId = uuidv4();
-    const savedTest = {
-        id: savedTestId,
-        testName: test.testName,
-        savedDate: new Date().toISOString(),
-        questions: test.questions,
-        questionsOdia: test.questionsOdia || null,
-        images: test.images || {},
-        settings: {
-            timerMinutes: test.timerMinutes,
-            correctMark: test.correctMark,
-            wrongMark: test.wrongMark
+        // Validate private code
+        const PRIVATE_CODE = process.env.SAVE_TEST_CODE || 'Jitu@2002';
+        if (privateCode !== PRIVATE_CODE) {
+            return res.status(403).json({ error: 'Invalid private code' });
         }
-    };
 
-    savedTests.push(savedTest);
+        // Find the test
+        const test = tests[testId];
+        if (!test) {
+            return res.status(404).json({ error: 'Test not found' });
+        }
 
-    res.json({
-        success: true,
-        message: 'Test saved successfully',
-        savedTestId: savedTestId
-    });
+        // Create saved test in database
+        const savedTest = await SavedTest.create({
+            testId: testId,
+            testName: test.testName,
+            config: {
+                timerMinutes: test.timerMinutes,
+                correctMark: test.correctMark,
+                wrongMark: test.wrongMark
+            },
+            questions: test.questions,
+            images: test.images || {},
+            isDualLanguage: !!test.questionsOdia,
+            questionsOdia: test.questionsOdia || []
+        });
+
+        res.json({
+            success: true,
+            message: 'Test saved successfully',
+            savedTestId: savedTest._id
+        });
+    } catch (error) {
+        console.error('Error saving test:', error);
+        res.status(500).json({ error: 'Failed to save test' });
+    }
 };
 
 // GET ALL SAVED TESTS
-exports.getSavedTests = (req, res) => {
-    const testsList = savedTests.map(test => ({
-        id: test.id,
-        testName: test.testName,
-        savedDate: test.savedDate,
-        questionCount: test.questions.length,
-        isBilingual: !!test.questionsOdia
-    }));
+exports.getSavedTests = async (req, res) => {
+    try {
+        const savedTests = await SavedTest.find()
+            .select('_id testName savedAt questions isDualLanguage')
+            .sort({ savedAt: -1 });
 
-    res.json({
-        savedTests: testsList
-    });
+        const testsList = savedTests.map(test => ({
+            id: test._id,
+            testName: test.testName,
+            savedDate: test.savedAt,
+            questionCount: test.questions.length,
+            isBilingual: test.isDualLanguage
+        }));
+
+        res.json({
+            savedTests: testsList
+        });
+    } catch (error) {
+        console.error('Error fetching saved tests:', error);
+        res.status(500).json({ error: 'Failed to fetch saved tests' });
+    }
 };
 
 // GET SPECIFIC SAVED TEST
-exports.getSavedTest = (req, res) => {
-    const { id } = req.params;
+exports.getSavedTest = async (req, res) => {
+    try {
+        const { id } = req.params;
 
-    const savedTest = savedTests.find(test => test.id === id);
+        const savedTest = await SavedTest.findById(id);
 
-    if (!savedTest) {
-        return res.status(404).json({ error: 'Saved test not found' });
+        if (!savedTest) {
+            return res.status(404).json({ error: 'Saved test not found' });
+        }
+
+        // Format response to match frontend expectations
+        const response = {
+            id: savedTest._id,
+            testName: savedTest.testName,
+            savedDate: savedTest.savedAt,
+            questions: savedTest.questions,
+            questionsOdia: savedTest.questionsOdia,
+            images: savedTest.images,
+            settings: savedTest.config
+        };
+
+        res.json(response);
+    } catch (error) {
+        console.error('Error fetching saved test:', error);
+        res.status(500).json({ error: 'Failed to fetch saved test' });
     }
-
-    res.json(savedTest);
 };
+
 

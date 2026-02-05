@@ -9,10 +9,17 @@ const PORT = process.env.PORT || 5000;
 // Multer Setup for Image Uploads
 // Cloudinary Setup
 require('dotenv').config();
+const mongoose = require('mongoose');
 const multer = require('multer');
 const path = require('path'); // Keep path for static serving if ensuring backward compat, though not needed for new uploads
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/test-platform';
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('MongoDB connected successfully'))
+    .catch(err => console.error('MongoDB connection error:', err));
 
 // Configure Cloudinary
 cloudinary.config({
