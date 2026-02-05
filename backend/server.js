@@ -16,10 +16,21 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 // MongoDB Connection
+// MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/test-platform';
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log('MongoDB connected successfully'))
-    .catch(err => console.error('MongoDB connection error:', err));
+
+// Create a masked URI for logging (hides password)
+const maskedURI = MONGODB_URI.replace(/:([^:@]+)@/, ':****@');
+console.log(`Attempting to connect to MongoDB at: ${maskedURI}`);
+
+mongoose.connect(MONGODB_URI, {
+    family: 4, // Force IPv4 - often fixes Render/Atlas connection issues
+    serverSelectionTimeoutMS: 5000 // Fail faster if not connected
+})
+    .then(() => console.log('✅ MongoDB connected successfully'))
+    .catch(err => {
+        console.error('❌ MongoDB connection error details:', err);
+    });
 
 // Configure Cloudinary
 cloudinary.config({
