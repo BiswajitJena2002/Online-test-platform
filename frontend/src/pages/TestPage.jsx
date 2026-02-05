@@ -7,6 +7,8 @@ import NavigationPanel from '../components/NavigationPanel';
 const TestPage = () => {
     const { testId } = useParams();
     const [questions, setQuestions] = useState([]);
+    const [questionsOdia, setQuestionsOdia] = useState([]); // New: Odia questions
+    const [language, setLanguage] = useState('english'); // New: 'english' | 'odia'
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [sessionId, setSessionId] = useState(null);
     const [answers, setAnswers] = useState({}); // { questionId: option }
@@ -16,7 +18,9 @@ const TestPage = () => {
     const [isPaused, setIsPaused] = useState(false);
     const [testName, setTestName] = useState('');
     const navigate = useNavigate();
-    const API_BASE = 'https://online-test-backend-m2sw.onrender.com';
+    const API_BASE = import.meta.env.MODE === 'development'
+        ? 'http://localhost:5000'
+        : 'https://online-test-backend-m2sw.onrender.com';
 
     // Start test session when component mounts
     useEffect(() => {
@@ -29,6 +33,7 @@ const TestPage = () => {
                 const data = await res.json();
                 setSessionId(data.sessionId);
                 setQuestions(data.questions);
+                setQuestionsOdia(data.questionsOdia || []); // Set Odia questions
                 setTimerMinutes(data.timerMinutes || 30);
                 setTestName(data.testName || 'Online Test');
                 localStorage.setItem('test_session_id', data.sessionId);
@@ -45,6 +50,7 @@ const TestPage = () => {
     const handleOptionSelect = async (optionKey) => {
         if (isPaused) return; // Don't allow changes when paused
 
+        // Always use English question ID for tracking answers
         const question = questions[currentQuestionIndex];
         if (!question) return;
 
@@ -125,7 +131,17 @@ const TestPage = () => {
         );
     }
 
-    const currentQuestion = questions[currentQuestionIndex];
+    // Determine which question to display based on language
+    const currentQuestionEnglish = questions[currentQuestionIndex];
+    const currentQuestionOdia = questionsOdia && questionsOdia[currentQuestionIndex];
+
+    // Use Odia question if language is 'odia' and it exists, otherwise fallback to English
+    const displayQuestion = (language === 'odia' && currentQuestionOdia)
+        ? currentQuestionOdia
+        : currentQuestionEnglish;
+
+    // Ensure we preserve the original question_id for logic even if displaying Odia
+    // But for UI rendering, we use displayQuestion's text and options
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f9fafb' }}>
@@ -142,6 +158,42 @@ const TestPage = () => {
                     {testName} {isPaused && <span style={{ color: '#ef4444', fontSize: '1rem' }}>(PAUSED)</span>}
                 </h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {/* Language Toggle */}
+                    {questionsOdia && questionsOdia.length > 0 && (
+                        <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: '20px', padding: '0.25rem' }}>
+                            <button
+                                onClick={() => setLanguage('english')}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '16px',
+                                    border: 'none',
+                                    background: language === 'english' ? 'white' : 'transparent',
+                                    color: language === 'english' ? '#2563eb' : '#6b7280',
+                                    fontWeight: '600',
+                                    boxShadow: language === 'english' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                English
+                            </button>
+                            <button
+                                onClick={() => setLanguage('odia')}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '16px',
+                                    border: 'none',
+                                    background: language === 'odia' ? 'white' : 'transparent',
+                                    color: language === 'odia' ? '#2563eb' : '#6b7280',
+                                    fontWeight: '600',
+                                    boxShadow: language === 'odia' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Odia
+                            </button>
+                        </div>
+                    )}
+
                     <button
                         onClick={() => {
                             if (window.confirm("Start fresh test? Current progress will be lost.")) {
@@ -183,9 +235,22 @@ const TestPage = () => {
                     justifyContent: 'center'
                 }}>
                     <div style={{ width: '100%' }}>
+                        {/* Image Rendering */}
+                        {currentQuestionEnglish.image && (
+                            <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+                                <img
+                                    src={currentQuestionEnglish.image.startsWith('http')
+                                        ? currentQuestionEnglish.image
+                                        : `${API_BASE}${currentQuestionEnglish.image}`}
+                                    alt="Question Attachment"
+                                    style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                                />
+                            </div>
+                        )}
+
                         <QuestionCard
-                            question={currentQuestion}
-                            selectedOption={answers[currentQuestion?.question_id]}
+                            question={displayQuestion}
+                            selectedOption={answers[currentQuestionEnglish.question_id]}
                             onOptionSelect={handleOptionSelect}
                             onSkip={handleSkip}
                         />

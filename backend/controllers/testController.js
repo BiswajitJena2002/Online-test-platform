@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 // Store tests by unique ID
 let tests = {}; // { testId: { testName, timerMinutes, correctMark, wrongMark, questions, createdAt } }
 let sessions = {};
+let savedTests = []; // Store saved test templates
 
 // Default config (used when no test specified - backward compatibility)
 let defaultConfig = {
@@ -16,10 +17,24 @@ let questions = [];
 
 // CREATE NEW TEST
 exports.createTest = (req, res) => {
-    const { testName, timerMinutes, correctMark, wrongMark, questions } = req.body;
+    const { testName, timerMinutes, correctMark, wrongMark, questions, questionsOdia, images } = req.body;
 
     if (!testName || !questions || !Array.isArray(questions) || questions.length === 0) {
         return res.status(400).json({ error: "Test name and questions are required" });
+    }
+
+    // If images are provided, map them to the corresponding questions
+    // images is expected to be { "0": "url1", "2": "url2" } where key is question index
+    if (images && typeof images === 'object') {
+        Object.keys(images).forEach(index => {
+            if (questions[index]) {
+                questions[index].image = images[index];
+            }
+            // Also add to Odia questions if they exist
+            if (questionsOdia && questionsOdia[index]) {
+                questionsOdia[index].image = images[index];
+            }
+        });
     }
 
     const testId = uuidv4().split('-')[0]; // Short ID like "a3f5b2c1"
@@ -31,6 +46,7 @@ exports.createTest = (req, res) => {
         correctMark: correctMark !== undefined ? correctMark : 1,
         wrongMark: wrongMark !== undefined ? wrongMark : -0.25,
         questions,
+        questionsOdia: questionsOdia || null, // Store Odia questions if provided
         createdAt: Date.now()
     };
 
@@ -58,7 +74,8 @@ exports.getTestInfo = (req, res) => {
         questionCount: test.questions.length,
         timerMinutes: test.timerMinutes,
         correctMark: test.correctMark,
-        wrongMark: test.wrongMark
+        wrongMark: test.wrongMark,
+        isBilingual: !!test.questionsOdia // Flag to indicate if test has Odia support
     });
 };
 
@@ -78,19 +95,23 @@ exports.startTestSession = (req, res) => {
         startTime: Date.now(),
         endTime: null,
         answers: {},
-        skipped: []
+        skipped: [],
+        result: null
     };
 
     // Return sanitized questions (without correct answers)
-    const sanitizedQuestions = test.questions.map(q => {
-        const { correct_answer, ...rest } = q;
-        return rest;
-    });
+    const sanitizedQuestions = test.questions.map(({ correct_answer, ...rest }) => rest);
+
+    // Sanitize Odia questions if they exist
+    const sanitizedQuestionsOdia = test.questionsOdia
+        ? test.questionsOdia.map(({ correct_answer, ...rest }) => rest)
+        : null;
 
     res.json({
         sessionId,
         testName: test.testName,
         questions: sanitizedQuestions,
+        questionsOdia: sanitizedQuestionsOdia,
         timerMinutes: test.timerMinutes,
         correctMark: test.correctMark,
         wrongMark: test.wrongMark
@@ -128,9 +149,13 @@ exports.startTest = (req, res) => {
         return rest;
     });
 
+    // For legacy, there's no questionsOdia, so it will be null
+    const sanitizedQuestionsOdia = null;
+
     res.json({
         sessionId,
         questions: sanitizedQuestions,
+        questionsOdia: sanitizedQuestionsOdia, // Added for consistency, will be null
         timerMinutes: defaultConfig.timerMinutes,
         correctMark: defaultConfig.correctMark,
         wrongMark: defaultConfig.wrongMark
@@ -220,6 +245,7 @@ exports.getResult = (req, res) => {
     }));
 
     res.json({
+        testId: session.testId,
         summary: session.result,
         detailedReview
     });
@@ -247,3 +273,75 @@ exports.getInfo = (req, res) => {
         wrongMark: defaultConfig.wrongMark
     });
 };
+
+// ========== SAVED TESTS FEATURE ==========
+
+// SAVE TEST TEMPLATE (with private code)
+exports.saveTest = (req, res) => {
+    const { testId, privateCode } = req.body;
+
+    // Validate private code
+    const PRIVATE_CODE = process.env.SAVE_TEST_CODE || 'Jitu@2002';
+    if (privateCode !== PRIVATE_CODE) {
+        return res.status(403).json({ error: 'Invalid private code' });
+    }
+
+    // Find the test
+    const test = tests[testId];
+    if (!test) {
+        return res.status(404).json({ error: 'Test not found' });
+    }
+
+    // Create saved test object
+    const savedTestId = uuidv4();
+    const savedTest = {
+        id: savedTestId,
+        testName: test.testName,
+        savedDate: new Date().toISOString(),
+        questions: test.questions,
+        questionsOdia: test.questionsOdia || null,
+        images: test.images || {},
+        settings: {
+            timerMinutes: test.timerMinutes,
+            correctMark: test.correctMark,
+            wrongMark: test.wrongMark
+        }
+    };
+
+    savedTests.push(savedTest);
+
+    res.json({
+        success: true,
+        message: 'Test saved successfully',
+        savedTestId: savedTestId
+    });
+};
+
+// GET ALL SAVED TESTS
+exports.getSavedTests = (req, res) => {
+    const testsList = savedTests.map(test => ({
+        id: test.id,
+        testName: test.testName,
+        savedDate: test.savedDate,
+        questionCount: test.questions.length,
+        isBilingual: !!test.questionsOdia
+    }));
+
+    res.json({
+        savedTests: testsList
+    });
+};
+
+// GET SPECIFIC SAVED TEST
+exports.getSavedTest = (req, res) => {
+    const { id } = req.params;
+
+    const savedTest = savedTests.find(test => test.id === id);
+
+    if (!savedTest) {
+        return res.status(404).json({ error: 'Saved test not found' });
+    }
+
+    res.json(savedTest);
+};
+

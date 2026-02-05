@@ -8,7 +8,9 @@ const CandidateLandingPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const API_BASE = 'https://online-test-backend-m2sw.onrender.com';
+    const API_BASE = import.meta.env.MODE === 'development'
+        ? 'http://localhost:5000'
+        : 'https://online-test-backend-m2sw.onrender.com';
 
     useEffect(() => {
         const fetchTestInfo = async () => {
@@ -54,6 +56,22 @@ const CandidateLandingPage = () => {
         <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', minHeight: '100vh' }}>
             <div className="card" style={{ maxWidth: '700px', width: '90%', textAlign: 'center', padding: '3rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
                 <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem', color: '#1f2937' }}>{testInfo.testName}</h1>
+
+                {testInfo.isBilingual && (
+                    <div style={{ marginBottom: '1rem' }}>
+                        <span style={{
+                            background: '#dbeafe',
+                            color: '#1e40af',
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.875rem',
+                            fontWeight: '600'
+                        }}>
+                            🌐 Bilingual (English & Odia)
+                        </span>
+                    </div>
+                )}
+
                 <p style={{ color: '#6b7280', fontSize: '1.1rem', marginBottom: '2.5rem' }}>
                     Welcome! Please review the test details below before starting.
                 </p>

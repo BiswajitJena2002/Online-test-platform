@@ -6,8 +6,45 @@ const testController = require('./controllers/testController');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Multer Setup for Image Uploads
+// Cloudinary Setup
+require('dotenv').config();
+const multer = require('multer');
+const path = require('path'); // Keep path for static serving if ensuring backward compat, though not needed for new uploads
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Configure Multer Storage for Cloudinary
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'online-test-platform', // Folder name in Cloudinary
+        allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+    },
+});
+
+const upload = multer({ storage: storage });
+
 app.use(cors());
 app.use(bodyParser.json());
+// Serve static files (optional, for backward compatibility with old local images)
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
+// File Upload Endpoint
+app.post('/api/upload', upload.single('image'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+    // Return the secure Cloudinary URL
+    res.json({ url: req.file.path });
+});
 
 app.get('/', (req, res) => {
     res.send('Online Test API is running');
@@ -18,6 +55,11 @@ app.get('/', (req, res) => {
 app.post('/api/test/create', testController.createTest);
 app.get('/api/test/:testId/info', testController.getTestInfo);
 app.post('/api/test/:testId/start', testController.startTestSession);
+
+// Saved tests routes
+app.post('/api/test/save', testController.saveTest);
+app.get('/api/tests/saved', testController.getSavedTests);
+app.get('/api/tests/saved/:id', testController.getSavedTest);
 
 // Legacy routes (backward compatibility)
 app.post('/api/questions', testController.uploadQuestions);
