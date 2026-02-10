@@ -238,6 +238,12 @@ body {
     color: white;
 }
 
+.nav-btn.marked {
+    background-color: #8b5cf6;
+    /* Violet */
+    color: white;
+}
+
 /* Result Page */
 .result-card {
     background: white;
@@ -427,4 +433,86 @@ body.large-text {
     background-color: var(--card-bg) !important;
     border-bottom: 1px solid var(--border-color) !important;
     color: var(--text-main);
+}
+/* Subject-Wise Test Styles */
+.subject-tabs {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-bottom: 2px solid #e5e7eb;
+    overflow-x: auto;
+    flex-wrap: wrap;
+}
+
+.subject-tab {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    border: 2px solid #e5e7eb;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.subject-tab:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+
+.subject-tab.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.subject-header {
+    font-weight: 600;
+    color: #1f2937;
+    margin: 1rem 0 0.5rem 0;
+    padding: 0.5rem;
+    background: #f3f4f6;
+    border-radius: 4px;
+    font-size: 0.95rem;
+}
+
+.subject-result-card {
+    padding: 1.5rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    background: white;
+}
+
+.subject-result-card h4 {
+    margin: 0 0 1rem 0;
+    color: #1f2937;
+    font-size: 1.1rem;
+}
+
+.subject-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.subject-stat {
+    text-align: center;
+    padding: 0.75rem;
+    background: #f9fafb;
+    border-radius: 6px;
+}
+
+.subject-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #3b82f6;
+}
+
+.subject-stat-label {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
 }

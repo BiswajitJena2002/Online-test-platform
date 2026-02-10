@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Timer from '../components/Timer';
 import QuestionCard from '../components/QuestionCard';
 import NavigationPanel from '../components/NavigationPanel';
+import SubjectNavigator from '../components/SubjectNavigator';
 
 const TestPage = () => {
     const { testId } = useParams();
@@ -13,11 +14,18 @@ const TestPage = () => {
     const [sessionId, setSessionId] = useState(null);
     const [answers, setAnswers] = useState({}); // { questionId: option }
     const [skipped, setSkipped] = useState([]); // [questionId]
+    const [markedForReview, setMarkedForReview] = useState([]); // [questionId]
     const [loading, setLoading] = useState(true);
     const [timerMinutes, setTimerMinutes] = useState(30);
     const [isPaused, setIsPaused] = useState(false);
     const [testName, setTestName] = useState('');
     const [imageModal, setImageModal] = useState({ show: false, url: '', zoom: 1 });
+
+    // Subject-wise test support
+    const [isSubjectWise, setIsSubjectWise] = useState(false);
+    const [sections, setSections] = useState([]);
+    const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+    const [questionToSectionMap, setQuestionToSectionMap] = useState({}); // { questionId: sectionIndex }
     const navigate = useNavigate();
     const API_BASE = import.meta.env.MODE === 'development'
         ? 'http://localhost:5000'
@@ -33,10 +41,38 @@ const TestPage = () => {
                 }
                 const data = await res.json();
                 setSessionId(data.sessionId);
-                setQuestions(data.questions);
-                setQuestionsOdia(data.questionsOdia || []); // Set Odia questions
                 setTimerMinutes(data.timerMinutes || 30);
                 setTestName(data.testName || 'Online Test');
+                setIsSubjectWise(data.isSubjectWise || false);
+
+                if (data.isSubjectWise && data.sections) {
+                    // Subject-wise test: flatten sections into questions array
+                    setSections(data.sections);
+                    let allQuestions = [];
+                    let allQuestionsOdia = [];
+                    let qToSectionMap = {};
+
+                    data.sections.forEach((section, sectionIdx) => {
+                        section.questions.forEach(q => {
+                            allQuestions.push(q);
+                            qToSectionMap[q.question_id] = sectionIdx;
+                        });
+                        if (section.questionsOdia) {
+                            section.questionsOdia.forEach(q => {
+                                allQuestionsOdia.push(q);
+                            });
+                        }
+                    });
+
+                    setQuestions(allQuestions);
+                    setQuestionsOdia(allQuestionsOdia);
+                    setQuestionToSectionMap(qToSectionMap);
+                } else {
+                    // Flat test
+                    setQuestions(data.questions);
+                    setQuestionsOdia(data.questionsOdia || []);
+                }
+
                 localStorage.setItem('test_session_id', data.sessionId);
                 setLoading(false);
             } catch (err) {
@@ -96,6 +132,51 @@ const TestPage = () => {
         }
     };
 
+    const handleMarkForReview = () => {
+        if (isPaused) return; // Don't allow changes when paused
+
+        const question = questions[currentQuestionIndex];
+        if (!question) return;
+
+        setMarkedForReview(prev => {
+            if (prev.includes(question.question_id)) {
+                // Unmark: remove from array
+                return prev.filter(id => id !== question.question_id);
+            } else {
+                // Mark: add to array
+                return [...prev, question.question_id];
+            }
+        });
+    };
+
+    const handleClearOption = async () => {
+        if (isPaused) return; // Don't allow changes when paused
+
+        const question = questions[currentQuestionIndex];
+        if (!question) return;
+
+        // Remove answer from state
+        setAnswers(prev => {
+            const next = { ...prev };
+            delete next[question.question_id];
+            return next;
+        });
+
+        // Remove from skipped array if present
+        setSkipped(prev => prev.filter(id => id !== question.question_id));
+
+        // Send null to backend
+        await fetch(`${API_BASE}/api/submit-answer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId,
+                questionId: question.question_id,
+                selectedOption: null
+            })
+        });
+    };
+
     const handlePauseResume = () => {
         setIsPaused(!isPaused);
     };
@@ -110,6 +191,47 @@ const TestPage = () => {
         });
 
         navigate(`/result/${sessionId}`);
+    };
+
+    const handleImageClick = (url) => {
+        setImageModal({ show: true, url, zoom: 1 });
+    };
+
+    const closeImageModal = () => {
+        setImageModal({ show: false, url: '', zoom: 1 });
+    };
+
+    const zoomIn = () => {
+        setImageModal(prev => ({ ...prev, zoom: Math.min(prev.zoom + 0.25, 3) }));
+    };
+
+    const zoomOut = () => {
+        setImageModal(prev => ({ ...prev, zoom: Math.max(prev.zoom - 0.25, 0.5) }));
+    };
+
+    // Subject-wise navigation helpers
+    const handleSectionChange = (sectionIndex) => {
+        setCurrentSectionIndex(sectionIndex);
+        // Find first question in this section
+        const firstQuestionInSection = questions.findIndex(q => questionToSectionMap[q.question_id] === sectionIndex);
+        if (firstQuestionInSection !== -1) {
+            setCurrentQuestionIndex(firstQuestionInSection);
+        }
+    };
+
+    const calculateSectionProgress = () => {
+        if (!isSubjectWise || sections.length === 0) return {};
+
+        const progress = {};
+        sections.forEach((section, idx) => {
+            const sectionQuestions = questions.filter(q => questionToSectionMap[q.question_id] === idx);
+            const answered = sectionQuestions.filter(q => answers[q.question_id]).length;
+            progress[section.subject_id] = {
+                answered,
+                total: sectionQuestions.length
+            };
+        });
+        return progress;
     };
 
     if (loading) return <div className="loading-screen">Loading Test...</div>;
@@ -223,6 +345,16 @@ const TestPage = () => {
                 </div>
             </header>
 
+            {/* Subject Navigator - Only show for subject-wise tests */}
+            {isSubjectWise && sections.length > 0 && (
+                <SubjectNavigator
+                    sections={sections}
+                    currentSectionIndex={currentSectionIndex}
+                    onSectionChange={handleSectionChange}
+                    sectionProgress={calculateSectionProgress()}
+                />
+            )}
+
             {/* Main Content - Full Height */}
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* Left: Question Area */}
@@ -271,7 +403,40 @@ const TestPage = () => {
                             onSkip={handleSkip}
                         />
 
-                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'space-between' }}>
+                        {/* Mark for Review and Clear Option Buttons */}
+                        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                            <button
+                                disabled={isPaused}
+                                onClick={handleMarkForReview}
+                                className="btn"
+                                style={{
+                                    opacity: isPaused ? 0.5 : 1,
+                                    fontSize: '1rem',
+                                    padding: '0.75rem 1.5rem',
+                                    background: markedForReview.includes(currentQuestionEnglish.question_id) ? '#8b5cf6' : '#f59e0b',
+                                    color: 'white',
+                                    fontWeight: '600'
+                                }}
+                            >
+                                {markedForReview.includes(currentQuestionEnglish.question_id) ? '🔖 Unmark for Review' : '🔖 Mark for Review'}
+                            </button>
+                            <button
+                                disabled={isPaused || !answers[currentQuestionEnglish.question_id]}
+                                onClick={handleClearOption}
+                                className="btn btn-secondary"
+                                style={{
+                                    opacity: (isPaused || !answers[currentQuestionEnglish.question_id]) ? 0.5 : 1,
+                                    fontSize: '1rem',
+                                    padding: '0.75rem 1.5rem',
+                                    fontWeight: '600'
+                                }}
+                            >
+                                ✖ Clear Option
+                            </button>
+                        </div>
+
+                        {/* Navigation Buttons */}
+                        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between' }}>
                             <button
                                 disabled={currentQuestionIndex === 0 || isPaused}
                                 onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
@@ -301,6 +466,9 @@ const TestPage = () => {
                         answers={answers}
                         skipped={skipped}
                         questions={questions}
+                        markedForReview={markedForReview}
+                        sections={sections}
+                        isSubjectWise={isSubjectWise}
                     />
                 </div>
             </div>

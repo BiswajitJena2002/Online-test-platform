@@ -20,7 +20,7 @@ const SavedTestSchema = new mongoose.Schema({
     },
     questions: {
         type: mongoose.Schema.Types.Mixed,
-        required: true
+        required: false // Made optional for subject-wise tests
     },
     images: {
         type: mongoose.Schema.Types.Mixed,
@@ -32,6 +32,20 @@ const SavedTestSchema = new mongoose.Schema({
     },
     questionsOdia: {
         type: mongoose.Schema.Types.Mixed,
+        default: []
+    },
+    // Subject-wise test support
+    isSubjectWise: {
+        type: Boolean,
+        default: false
+    },
+    sections: {
+        type: [{
+            subject_id: String,
+            subject_name: String,
+            questions: mongoose.Schema.Types.Mixed,
+            questionsOdia: mongoose.Schema.Types.Mixed
+        }],
         default: []
     }
 });

@@ -17,20 +17,32 @@ let questions = [];
 
 // CREATE NEW TEST
 exports.createTest = (req, res) => {
-    const { testName, timerMinutes, correctMark, wrongMark, questions, questionsOdia, images } = req.body;
+    const { testName, timerMinutes, correctMark, wrongMark, questions, questionsOdia, images, sections, isSubjectWise } = req.body;
 
-    if (!testName || !questions || !Array.isArray(questions) || questions.length === 0) {
-        return res.status(400).json({ error: "Test name and questions are required" });
+    if (!testName || (!questions && !sections)) {
+        return res.status(400).json({ error: "Test name and questions/sections are required" });
+    }
+
+    // Validate subject-wise test
+    if (isSubjectWise && sections) {
+        if (!Array.isArray(sections) || sections.length === 0) {
+            return res.status(400).json({ error: "Sections array is required for subject-wise tests" });
+        }
+    }
+
+    // Validate flat test
+    if (!isSubjectWise && questions) {
+        if (!Array.isArray(questions) || questions.length === 0) {
+            return res.status(400).json({ error: "Questions array is required" });
+        }
     }
 
     // If images are provided, map them to the corresponding questions
-    // images is expected to be { "0": "url1", "2": "url2" } where key is question index
-    if (images && typeof images === 'object') {
+    if (images && typeof images === 'object' && !isSubjectWise) {
         Object.keys(images).forEach(index => {
             if (questions[index]) {
                 questions[index].image = images[index];
             }
-            // Also add to Odia questions if they exist
             if (questionsOdia && questionsOdia[index]) {
                 questionsOdia[index].image = images[index];
             }
@@ -45,17 +57,23 @@ exports.createTest = (req, res) => {
         timerMinutes: timerMinutes || 30,
         correctMark: correctMark !== undefined ? correctMark : 1,
         wrongMark: wrongMark !== undefined ? wrongMark : -0.25,
-        questions,
-        questionsOdia: questionsOdia || null, // Store Odia questions if provided
+        questions: questions || [],
+        questionsOdia: questionsOdia || null,
+        sections: sections || [],
+        isSubjectWise: isSubjectWise || false,
         createdAt: Date.now()
     };
 
-    console.log(`Created test "${testName}" with ID: ${testId}`);
+    const questionCount = isSubjectWise
+        ? sections.reduce((sum, section) => sum + (section.questions?.length || 0), 0)
+        : questions.length;
+
+    console.log(`Created test "${testName}" with ID: ${testId} (${isSubjectWise ? 'Subject-wise' : 'Flat'})`);
     res.json({
         message: "Test created successfully",
         testId,
         testName,
-        questionCount: questions.length
+        questionCount
     });
 };
 
@@ -68,15 +86,30 @@ exports.getTestInfo = (req, res) => {
         return res.status(404).json({ error: "Test not found" });
     }
 
-    res.json({
+    const questionCount = test.isSubjectWise
+        ? test.sections.reduce((sum, section) => sum + (section.questions?.length || 0), 0)
+        : test.questions.length;
+
+    const response = {
         testId: test.testId,
         testName: test.testName,
-        questionCount: test.questions.length,
+        questionCount,
         timerMinutes: test.timerMinutes,
         correctMark: test.correctMark,
         wrongMark: test.wrongMark,
-        isBilingual: !!test.questionsOdia // Flag to indicate if test has Odia support
-    });
+        isBilingual: !!test.questionsOdia,
+        isSubjectWise: test.isSubjectWise || false
+    };
+
+    if (test.isSubjectWise) {
+        response.sections = test.sections.map(s => ({
+            subject_id: s.subject_id,
+            subject_name: s.subject_name,
+            questionCount: s.questions?.length || 0
+        }));
+    }
+
+    res.json(response);
 };
 
 // START TEST SESSION (for specific test)
@@ -96,26 +129,41 @@ exports.startTestSession = (req, res) => {
         endTime: null,
         answers: {},
         skipped: [],
-        result: null
+        result: null,
+        isSubjectWise: test.isSubjectWise || false
     };
 
-    // Return sanitized questions (without correct answers)
-    const sanitizedQuestions = test.questions.map(({ correct_answer, ...rest }) => rest);
-
-    // Sanitize Odia questions if they exist
-    const sanitizedQuestionsOdia = test.questionsOdia
-        ? test.questionsOdia.map(({ correct_answer, ...rest }) => rest)
-        : null;
-
-    res.json({
+    let response = {
         sessionId,
         testName: test.testName,
-        questions: sanitizedQuestions,
-        questionsOdia: sanitizedQuestionsOdia,
         timerMinutes: test.timerMinutes,
         correctMark: test.correctMark,
-        wrongMark: test.wrongMark
-    });
+        wrongMark: test.wrongMark,
+        isSubjectWise: test.isSubjectWise || false
+    };
+
+    if (test.isSubjectWise) {
+        // Sanitize sections
+        const sanitizedSections = test.sections.map(section => ({
+            subject_id: section.subject_id,
+            subject_name: section.subject_name,
+            questions: section.questions.map(({ correct_answer, ...rest }) => rest),
+            questionsOdia: section.questionsOdia
+                ? section.questionsOdia.map(({ correct_answer, ...rest }) => rest)
+                : null
+        }));
+        response.sections = sanitizedSections;
+    } else {
+        // Return sanitized questions (without correct answers)
+        const sanitizedQuestions = test.questions.map(({ correct_answer, ...rest }) => rest);
+        const sanitizedQuestionsOdia = test.questionsOdia
+            ? test.questionsOdia.map(({ correct_answer, ...rest }) => rest)
+            : null;
+        response.questions = sanitizedQuestions;
+        response.questionsOdia = sanitizedQuestionsOdia;
+    }
+
+    res.json(response);
 };
 
 // LEGACY: Upload questions (backward compatibility)
@@ -188,38 +236,89 @@ exports.endTest = (req, res) => {
 
     session.endTime = Date.now();
 
-    // Get questions from test or legacy
-    const testQuestions = session.testId ? tests[session.testId].questions : questions;
-    const config = session.testId ? tests[session.testId] : defaultConfig;
+    const test = session.testId ? tests[session.testId] : null;
+    const config = test || defaultConfig;
 
     let correctCount = 0;
     let wrongCount = 0;
     let skippedCount = 0;
     let score = 0;
+    let subjectWiseResults = [];
 
-    testQuestions.forEach(q => {
-        const qId = q.question_id;
-        if (session.skipped.includes(qId) || !session.answers[qId]) {
-            skippedCount++;
-        } else {
-            const userAnswer = session.answers[qId];
-            if (userAnswer === q.correct_answer) {
-                correctCount++;
-                score += config.correctMark;
+    // Get all questions (flatten if subject-wise)
+    let allQuestions = [];
+    if (test && test.isSubjectWise) {
+        // Process subject-wise
+        test.sections.forEach(section => {
+            let sectionCorrect = 0;
+            let sectionWrong = 0;
+            let sectionSkipped = 0;
+            let sectionScore = 0;
+
+            section.questions.forEach(q => {
+                const qId = q.question_id;
+                if (session.skipped.includes(qId) || !session.answers[qId]) {
+                    skippedCount++;
+                    sectionSkipped++;
+                } else {
+                    const userAnswer = session.answers[qId];
+                    if (userAnswer === q.correct_answer) {
+                        correctCount++;
+                        sectionCorrect++;
+                        score += config.correctMark;
+                        sectionScore += config.correctMark;
+                    } else {
+                        wrongCount++;
+                        sectionWrong++;
+                        score += config.wrongMark;
+                        sectionScore += config.wrongMark;
+                    }
+                }
+            });
+
+            subjectWiseResults.push({
+                subject_id: section.subject_id,
+                subject_name: section.subject_name,
+                totalQuestions: section.questions.length,
+                correctCount: sectionCorrect,
+                wrongCount: sectionWrong,
+                skippedCount: sectionSkipped,
+                score: sectionScore,
+                totalMarks: section.questions.length * config.correctMark
+            });
+
+            allQuestions = allQuestions.concat(section.questions);
+        });
+    } else {
+        // Process flat questions
+        const testQuestions = test ? test.questions : questions;
+        testQuestions.forEach(q => {
+            const qId = q.question_id;
+            if (session.skipped.includes(qId) || !session.answers[qId]) {
+                skippedCount++;
             } else {
-                wrongCount++;
-                score += config.wrongMark;
+                const userAnswer = session.answers[qId];
+                if (userAnswer === q.correct_answer) {
+                    correctCount++;
+                    score += config.correctMark;
+                } else {
+                    wrongCount++;
+                    score += config.wrongMark;
+                }
             }
-        }
-    });
+        });
+        allQuestions = testQuestions;
+    }
 
     session.result = {
-        totalQuestions: testQuestions.length,
+        totalQuestions: allQuestions.length,
         correctCount,
         wrongCount,
         skippedCount,
         score,
-        totalMarks: testQuestions.length * config.correctMark
+        totalMarks: allQuestions.length * config.correctMark,
+        isSubjectWise: test?.isSubjectWise || false,
+        subjectWiseResults: test?.isSubjectWise ? subjectWiseResults : null
     };
 
     res.json({ message: "Test submitted", result: session.result });
@@ -231,24 +330,58 @@ exports.getResult = (req, res) => {
     if (!session) return res.status(404).json({ error: "Session not found" });
     if (!session.endTime) return res.status(400).json({ error: "Test not yet submitted" });
 
-    const testQuestions = session.testId ? tests[session.testId].questions : questions;
+    const test = session.testId ? tests[session.testId] : null;
+    let detailedReview = [];
+    let detailedReviewBySubject = [];
 
-    const detailedReview = testQuestions.map(q => ({
-        questionId: q.question_id,
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correct_answer,
-        userAnswer: session.answers[q.question_id] || null,
-        status: session.answers[q.question_id]
-            ? (session.answers[q.question_id] === q.correct_answer ? 'correct' : 'wrong')
-            : 'skipped'
-    }));
+    if (test && test.isSubjectWise) {
+        // Group by subject
+        test.sections.forEach(section => {
+            const sectionReview = section.questions.map(q => ({
+                questionId: q.question_id,
+                question: q.question,
+                options: q.options,
+                correctAnswer: q.correct_answer,
+                userAnswer: session.answers[q.question_id] || null,
+                status: session.answers[q.question_id]
+                    ? (session.answers[q.question_id] === q.correct_answer ? 'correct' : 'wrong')
+                    : 'skipped'
+            }));
 
-    res.json({
+            detailedReviewBySubject.push({
+                subject_id: section.subject_id,
+                subject_name: section.subject_name,
+                questions: sectionReview
+            });
+
+            detailedReview = detailedReview.concat(sectionReview);
+        });
+    } else {
+        const testQuestions = test ? test.questions : questions;
+        detailedReview = testQuestions.map(q => ({
+            questionId: q.question_id,
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correct_answer,
+            userAnswer: session.answers[q.question_id] || null,
+            status: session.answers[q.question_id]
+                ? (session.answers[q.question_id] === q.correct_answer ? 'correct' : 'wrong')
+                : 'skipped'
+        }));
+    }
+
+    const response = {
         testId: session.testId,
         summary: session.result,
-        detailedReview
-    });
+        detailedReview,
+        isSubjectWise: test?.isSubjectWise || false
+    };
+
+    if (test?.isSubjectWise) {
+        response.detailedReviewBySubject = detailedReviewBySubject;
+    }
+
+    res.json(response);
 };
 
 exports.setConfig = (req, res) => {
@@ -302,10 +435,12 @@ exports.saveTest = async (req, res) => {
                 correctMark: test.correctMark,
                 wrongMark: test.wrongMark
             },
-            questions: test.questions,
+            questions: test.questions || [],
             images: test.images || {},
             isDualLanguage: !!test.questionsOdia,
-            questionsOdia: test.questionsOdia || []
+            questionsOdia: test.questionsOdia || [],
+            isSubjectWise: test.isSubjectWise || false,
+            sections: test.sections || []
         });
 
         res.json({
@@ -323,16 +458,23 @@ exports.saveTest = async (req, res) => {
 exports.getSavedTests = async (req, res) => {
     try {
         const savedTests = await SavedTest.find()
-            .select('_id testName savedAt questions isDualLanguage')
+            .select('_id testName savedAt questions sections isSubjectWise isDualLanguage')
             .sort({ savedAt: -1 });
 
-        const testsList = savedTests.map(test => ({
-            id: test._id,
-            testName: test.testName,
-            savedDate: test.savedAt,
-            questionCount: test.questions.length,
-            isBilingual: test.isDualLanguage
-        }));
+        const testsList = savedTests.map(test => {
+            const questionCount = test.isSubjectWise
+                ? test.sections.reduce((sum, section) => sum + (section.questions?.length || 0), 0)
+                : test.questions?.length || 0;
+
+            return {
+                id: test._id,
+                testName: test.testName,
+                savedDate: test.savedAt,
+                questionCount,
+                isBilingual: test.isDualLanguage,
+                isSubjectWise: test.isSubjectWise || false
+            };
+        });
 
         res.json({
             savedTests: testsList
@@ -359,10 +501,12 @@ exports.getSavedTest = async (req, res) => {
             id: savedTest._id,
             testName: savedTest.testName,
             savedDate: savedTest.savedAt,
-            questions: savedTest.questions,
-            questionsOdia: savedTest.questionsOdia,
-            images: savedTest.images,
-            settings: savedTest.config
+            questions: savedTest.questions || [],
+            questionsOdia: savedTest.questionsOdia || [],
+            images: savedTest.images || {},
+            settings: savedTest.config,
+            isSubjectWise: savedTest.isSubjectWise || false,
+            sections: savedTest.sections || []
         };
 
         res.json(response);

@@ -138,6 +138,39 @@ const ResultPage = () => {
                     </div>
                 </div>
 
+                {/* Subject-Wise Breakdown */}
+                {summary.subjectWise && summary.subjectWise.length > 0 && (
+                    <div style={{ marginBottom: '2rem' }}>
+                        <h2>Subject Performance</h2>
+                        <div className="subject-stats">
+                            {summary.subjectWise.map((subject, idx) => (
+                                <div key={idx} className="subject-result-card" style={{ marginBottom: 0 }}>
+                                    <h4>{subject.subject}</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <div className="subject-stat">
+                                            <div className="subject-stat-value" style={{ fontSize: '1.2rem' }}>
+                                                {subject.score} / {subject.totalMarks}
+                                            </div>
+                                            <div className="subject-stat-label">Score</div>
+                                        </div>
+                                        <div className="subject-stat" style={{ background: '#ecfdf5' }}>
+                                            <div className="subject-stat-value" style={{ fontSize: '1.2rem', color: '#059669' }}>
+                                                {Math.round((subject.score / (subject.totalMarks || 1)) * 100)}%
+                                            </div>
+                                            <div className="subject-stat-label">Accuracy</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>✅ {subject.correct}</span>
+                                        <span>❌ {subject.wrong}</span>
+                                        <span>⏭️ {subject.skipped}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <h2>Detailed Review</h2>
                 <div className="review-list">
                     {detailedReview.map((item, idx) => (

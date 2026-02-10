@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import SubjectSectionManager from '../components/SubjectSectionManager';
 
 const AdminPage = () => {
     const [testName, setTestName] = useState('');
     const [jsonInput, setJsonInput] = useState('');
     const [jsonInputOdia, setJsonInputOdia] = useState(''); // New: Odia JSON Input
     const [isDualLanguage, setIsDualLanguage] = useState(false); // New: Toggle Dual Language
+    const [isSubjectWise, setIsSubjectWise] = useState(false); // New: Toggle Subject-Wise
+    const [sections, setSections] = useState([]); // New: Sections array for subject-wise tests
     const [images, setImages] = useState({}); // New: Map question index to image URL { 0: "url", 2: "url" }
     const [message, setMessage] = useState('');
     const [timerMinutes, setTimerMinutes] = useState(30);
@@ -33,41 +36,77 @@ const AdminPage = () => {
         }
 
         try {
-            const parsed = JSON.parse(jsonInput);
-            const questions = Array.isArray(parsed) ? parsed : parsed.questions;
+            let requestBody = {
+                testName: testName.trim(),
+                timerMinutes: parseInt(timerMinutes),
+                correctMark: parseFloat(correctMark),
+                wrongMark: parseFloat(wrongMark),
+                isSubjectWise
+            };
 
-            if (!questions || questions.length === 0) {
-                setMessage('Error: No questions found in JSON');
-                return;
-            }
-
-            let questionsOdia = null;
-            if (isDualLanguage) {
-                if (!jsonInputOdia.trim()) {
-                    setMessage('Error: Please enter Odia questions JSON');
+            if (isSubjectWise) {
+                // Validate sections
+                if (sections.length === 0) {
+                    setMessage('Error: Please add at least one subject section');
                     return;
                 }
-                const parsedOdia = JSON.parse(jsonInputOdia);
-                questionsOdia = Array.isArray(parsedOdia) ? parsedOdia : parsedOdia.questions;
 
-                if (questionsOdia.length !== questions.length) {
-                    setMessage(`Error: Question count mismatch. English: ${questions.length}, Odia: ${questionsOdia.length}`);
+                // Validate each section
+                for (let i = 0; i < sections.length; i++) {
+                    const section = sections[i];
+                    if (!section.subject_name.trim()) {
+                        setMessage(`Error: Section ${i + 1} is missing a subject name`);
+                        return;
+                    }
+                    if (!section.questions || section.questions.length === 0) {
+                        setMessage(`Error: Section "${section.subject_name}" has no questions`);
+                        return;
+                    }
+                    if (isDualLanguage && (!section.questionsOdia || section.questionsOdia.length === 0)) {
+                        setMessage(`Error: Section "${section.subject_name}" is missing Odia questions`);
+                        return;
+                    }
+                    if (isDualLanguage && section.questions.length !== section.questionsOdia.length) {
+                        setMessage(`Error: Question count mismatch in section "${section.subject_name}"`);
+                        return;
+                    }
+                }
+
+                requestBody.sections = sections;
+            } else {
+                // Flat test validation
+                const parsed = JSON.parse(jsonInput);
+                const questions = Array.isArray(parsed) ? parsed : parsed.questions;
+
+                if (!questions || questions.length === 0) {
+                    setMessage('Error: No questions found in JSON');
                     return;
                 }
+
+                let questionsOdia = null;
+                if (isDualLanguage) {
+                    if (!jsonInputOdia.trim()) {
+                        setMessage('Error: Please enter Odia questions JSON');
+                        return;
+                    }
+                    const parsedOdia = JSON.parse(jsonInputOdia);
+                    questionsOdia = Array.isArray(parsedOdia) ? parsedOdia : parsedOdia.questions;
+
+                    if (questionsOdia.length !== questions.length) {
+                        setMessage(`Error: Question count mismatch. English: ${questions.length}, Odia: ${questionsOdia.length}`);
+                        return;
+                    }
+                }
+
+                requestBody.questions = questions;
+                requestBody.questionsOdia = questionsOdia;
+                requestBody.images = images;
             }
 
             const res = await fetch(`${API_BASE}/api/test/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    testName: testName.trim(),
-                    timerMinutes: parseInt(timerMinutes),
-                    correctMark: parseFloat(correctMark),
-                    wrongMark: parseFloat(wrongMark),
-                    questions,
-                    questionsOdia, // Send Odia questions
-                    images // Send image map
-                })
+                body: JSON.stringify(requestBody)
             });
 
             const data = await res.json();
@@ -80,6 +119,8 @@ const AdminPage = () => {
                 setJsonInput('');
                 setJsonInputOdia('');
                 setImages({});
+                setSections([]);
+                setIsSubjectWise(false);
             } else {
                 setMessage(`Error: ${data.error}`);
             }
@@ -144,9 +185,19 @@ const AdminPage = () => {
 
             // Pre-fill form with saved test data
             setTestName(data.testName + ' (Copy)');
-            setJsonInput(JSON.stringify(data.questions, null, 2));
-            setJsonInputOdia(data.questionsOdia ? JSON.stringify(data.questionsOdia, null, 2) : '');
-            setIsDualLanguage(!!data.questionsOdia);
+            setIsSubjectWise(data.isSubjectWise || false);
+            setIsDualLanguage(!!data.questionsOdia || data.sections?.some(s => s.questionsOdia));
+
+            if (data.isSubjectWise) {
+                setSections(data.sections || []);
+                setJsonInput('');
+                setJsonInputOdia('');
+            } else {
+                setJsonInput(JSON.stringify(data.questions, null, 2));
+                setJsonInputOdia(data.questionsOdia ? JSON.stringify(data.questionsOdia, null, 2) : '');
+                setSections([]);
+            }
+
             setImages(data.images || {});
             setTimerMinutes(data.settings.timerMinutes);
             setCorrectMark(data.settings.correctMark);
@@ -346,71 +397,98 @@ const AdminPage = () => {
 
                             {/* Question Upload */}
                             <div style={{ marginBottom: '2rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                    <h3 style={{ fontSize: '1.2rem', margin: 0 }}>📝 Questions (JSON Format)</h3>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: '#e0f2fe', padding: '0.5rem 1rem', borderRadius: '20px' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isDualLanguage}
-                                            onChange={(e) => setIsDualLanguage(e.target.checked)}
-                                        />
-                                        <span style={{ fontWeight: '600', color: '#0369a1' }}>Dual Language (Odia)</span>
-                                    </label>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                    <h3 style={{ fontSize: '1.2rem', margin: 0 }}>📝 Questions</h3>
+                                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: '#fef3c7', padding: '0.5rem 1rem', borderRadius: '20px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={isSubjectWise}
+                                                onChange={(e) => {
+                                                    setIsSubjectWise(e.target.checked);
+                                                    if (e.target.checked) {
+                                                        setSections([{ subject_id: 'subject1', subject_name: '', questions: [], questionsOdia: [] }]);
+                                                    } else {
+                                                        setSections([]);
+                                                    }
+                                                }}
+                                            />
+                                            <span style={{ fontWeight: '600', color: '#92400e' }}>📚 Subject-Wise Test</span>
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: '#e0f2fe', padding: '0.5rem 1rem', borderRadius: '20px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={isDualLanguage}
+                                                onChange={(e) => setIsDualLanguage(e.target.checked)}
+                                            />
+                                            <span style={{ fontWeight: '600', color: '#0369a1' }}>🌐 Dual Language (Odia)</span>
+                                        </label>
+                                    </div>
                                 </div>
 
-                                <div style={{ display: 'flex', gap: '1rem', flexDirection: isDualLanguage ? 'row' : 'column' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>English Questions {isDualLanguage && '(Default)'}</label>
-                                        <textarea
-                                            style={{
-                                                width: '100%',
-                                                height: '300px',
-                                                padding: '1rem',
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.9rem',
-                                                border: '2px solid #e5e7eb',
-                                                borderRadius: '6px',
-                                                resize: 'vertical'
-                                            }}
-                                            value={jsonInput}
-                                            onChange={(e) => setJsonInput(e.target.value)}
-                                            placeholder="Paste English JSON array..."
-                                        />
-                                    </div>
-                                    {isDualLanguage && (
-                                        <div style={{ flex: 1 }}>
-                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Odia Questions</label>
-                                            <textarea
-                                                style={{
-                                                    width: '100%',
-                                                    height: '300px',
-                                                    padding: '1rem',
-                                                    fontFamily: 'monospace',
-                                                    fontSize: '0.9rem',
-                                                    border: '2px solid #e5e7eb',
-                                                    borderRadius: '6px',
-                                                    resize: 'vertical'
-                                                }}
-                                                value={jsonInputOdia}
-                                                onChange={(e) => setJsonInputOdia(e.target.value)}
-                                                placeholder="Paste Odia JSON array..."
-                                            />
+                                {isSubjectWise ? (
+                                    <SubjectSectionManager
+                                        sections={sections}
+                                        setSections={setSections}
+                                        isDualLanguage={isDualLanguage}
+                                    />
+                                ) : (
+                                    <>
+                                        <div style={{ display: 'flex', gap: '1rem', flexDirection: isDualLanguage ? 'row' : 'column' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>English Questions {isDualLanguage && '(Default)'}</label>
+                                                <textarea
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '300px',
+                                                        padding: '1rem',
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.9rem',
+                                                        border: '2px solid #e5e7eb',
+                                                        borderRadius: '6px',
+                                                        resize: 'vertical'
+                                                    }}
+                                                    value={jsonInput}
+                                                    onChange={(e) => setJsonInput(e.target.value)}
+                                                    placeholder="Paste English JSON array..."
+                                                />
+                                            </div>
+                                            {isDualLanguage && (
+                                                <div style={{ flex: 1 }}>
+                                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Odia Questions</label>
+                                                    <textarea
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '300px',
+                                                            padding: '1rem',
+                                                            fontFamily: 'monospace',
+                                                            fontSize: '0.9rem',
+                                                            border: '2px solid #e5e7eb',
+                                                            borderRadius: '6px',
+                                                            resize: 'vertical'
+                                                        }}
+                                                        value={jsonInputOdia}
+                                                        onChange={(e) => setJsonInputOdia(e.target.value)}
+                                                        placeholder="Paste Odia JSON array..."
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                                    <button
-                                        onClick={() => {
-                                            setJsonInput(JSON.stringify(sampleJson, null, 2));
-                                            if (isDualLanguage) {
-                                                setJsonInputOdia(JSON.stringify(sampleJsonOdia, null, 2));
-                                            }
-                                        }}
-                                        className="btn btn-secondary"
-                                    >
-                                        📄 Load Sample Questions
-                                    </button>
-                                </div>
+                                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                                            <button
+                                                onClick={() => {
+                                                    setJsonInput(JSON.stringify(sampleJson, null, 2));
+                                                    if (isDualLanguage) {
+                                                        setJsonInputOdia(JSON.stringify(sampleJsonOdia, null, 2));
+                                                    }
+                                                }}
+                                                className="btn btn-secondary"
+                                            >
+                                                📄 Load Sample Questions
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Image Upload Section */}
