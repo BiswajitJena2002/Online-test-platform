@@ -137,7 +137,7 @@ const SubjectSectionManager = ({ sections, setSections, isDualLanguage }) => {
                         className="btn btn-secondary"
                         style={{ fontSize: '0.9rem', padding: '0.5rem 1rem', background: '#fff' }}
                     >
-                        📄 Load Sample Data
+                        📄 Load Sample Subjects
                     </button>
                     <button
                         onClick={addSection}
