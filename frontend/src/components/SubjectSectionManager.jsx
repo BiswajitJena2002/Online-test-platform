@@ -1,6 +1,101 @@
 import React from 'react';
 
 const SubjectSectionManager = ({ sections, setSections, isDualLanguage }) => {
+    const sampleSections = [
+        {
+            subject_id: 'mathematics',
+            subject_name: 'Mathematics',
+            questions: [
+                {
+                    "question_id": 101,
+                    "question": "What is 2 + 2?",
+                    "options": {
+                        "a": "3",
+                        "b": "4",
+                        "c": "5",
+                        "d": "6"
+                    },
+                    "correct_answer": "b"
+                },
+                {
+                    "question_id": 102,
+                    "question": "Value of Pi?",
+                    "options": {
+                        "a": "3.14",
+                        "b": "2.14",
+                        "c": "4.14",
+                        "d": "5.14"
+                    },
+                    "correct_answer": "a"
+                }
+            ],
+            questionsOdia: [
+                {
+                    "question_id": 101,
+                    "question": "୨ + ୨ କେତେ?",
+                    "options": {
+                        "a": "୩",
+                        "b": "୪",
+                        "c": "୫",
+                        "d": "୬"
+                    },
+                    "correct_answer": "b"
+                },
+                {
+                    "question_id": 102,
+                    "question": "ପାଇ ର ମୂଲ୍ୟ କେତେ?",
+                    "options": {
+                        "a": "୩.୧୪",
+                        "b": "୨.୧୪",
+                        "c": "୪.୧୪",
+                        "d": "୫.୧୪"
+                    },
+                    "correct_answer": "a"
+                }
+            ]
+        },
+        {
+            subject_id: 'science',
+            subject_name: 'Science',
+            questions: [
+                {
+                    "question_id": 201,
+                    "question": "Water formula?",
+                    "options": {
+                        "a": "H2O",
+                        "b": "CO2",
+                        "c": "O2",
+                        "d": "N2"
+                    },
+                    "correct_answer": "a"
+                }
+            ],
+            questionsOdia: [
+                {
+                    "question_id": 201,
+                    "question": "ଜଳର ସଙ୍କେତ କ'ଣ?",
+                    "options": {
+                        "a": "H2O",
+                        "b": "CO2",
+                        "c": "O2",
+                        "d": "N2"
+                    },
+                    "correct_answer": "a"
+                }
+            ]
+        }
+    ];
+
+    const loadSampleData = () => {
+        if (window.confirm("This will replace current sections with sample data. Continue?")) {
+            // Filter out Odia questions if not dual language
+            const dataToLoad = sampleSections.map(s => ({
+                ...s,
+                questionsOdia: isDualLanguage ? s.questionsOdia : []
+            }));
+            setSections(dataToLoad);
+        }
+    };
     const addSection = () => {
         setSections([...sections, {
             subject_id: `subject${sections.length + 1}`,
@@ -36,13 +131,22 @@ const SubjectSectionManager = ({ sections, setSections, isDualLanguage }) => {
         <div style={{ background: '#fef9e7', padding: '1.5rem', borderRadius: '8px', border: '2px solid #f59e0b' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h4 style={{ margin: 0, color: '#92400e' }}>Subject Sections</h4>
-                <button
-                    onClick={addSection}
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
-                >
-                    ➕ Add Section
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                        onClick={loadSampleData}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.9rem', padding: '0.5rem 1rem', background: '#fff' }}
+                    >
+                        📄 Load Sample Data
+                    </button>
+                    <button
+                        onClick={addSection}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+                    >
+                        ➕ Add Section
+                    </button>
+                </div>
             </div>
 
             {sections.map((section, sectionIndex) => (
