@@ -405,12 +405,13 @@ const AdminPage = () => {
                                                 type="checkbox"
                                                 checked={isSubjectWise}
                                                 onChange={(e) => {
-                                                    setIsSubjectWise(e.target.checked);
-                                                    if (e.target.checked) {
+                                                    const checked = e.target.checked;
+                                                    setIsSubjectWise(checked);
+                                                    // Only initialize if checking and no sections exist
+                                                    if (checked && sections.length === 0) {
                                                         setSections([{ subject_id: 'subject1', subject_name: '', questions: [], questionsOdia: [] }]);
-                                                    } else {
-                                                        setSections([]);
                                                     }
+                                                    // Do not clear sections when unchecking, so user doesn't lose data accidentally
                                                 }}
                                             />
                                             <span style={{ fontWeight: '600', color: '#92400e' }}>📚 Subject-Wise Test</span>
